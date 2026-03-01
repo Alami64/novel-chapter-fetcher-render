@@ -19,7 +19,9 @@ from playwright.sync_api import sync_playwright, Browser, BrowserContext
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
+import os
 
+_headless = os.getenv("HEADLESS", "1") == "1"
 # ── Thread pool for running Playwright (sync) off the event loop ─────
 _executor = ThreadPoolExecutor(max_workers=3)
 
@@ -38,7 +40,7 @@ def _ensure_browser() -> BrowserContext:
             if _pw is None:
                 _pw = sync_playwright().start()
             _browser = _pw.chromium.launch(
-                headless=False,
+                headless=_headless,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
