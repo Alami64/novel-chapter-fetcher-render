@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import "./App.css";
 
-const API = "http://localhost:8000/api/chapter";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API = `${API_BASE}/api/chapter`;
 
 function App() {
   const [url, setUrl] = useState("");

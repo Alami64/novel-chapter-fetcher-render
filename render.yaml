@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: novel-chapter-fetcher-api
+    runtime: docker
+    repo: https://github.com/Alami64/novel-chapter-fetcher-render
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: FRONTEND_URL
+        value: https://novel-chapter-fetcher-render.vercel.app

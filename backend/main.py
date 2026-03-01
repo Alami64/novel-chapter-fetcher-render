@@ -3,11 +3,12 @@ FastAPI backend – scrapes Chinese web novel chapters using Playwright (headles
 GET /api/chapter?url=<chapter_url>
 Returns JSON: { text: str, next_url: str | null }
 
-Uses Playwright's sync API in a thread pool to avoid Windows asyncio event-loop
-incompatibility (ProactorEventLoop does not support subprocess pipes).
+Cloud-deployable version: runs Playwright headless in a Docker container.
+Uses sync API in a thread pool for compatibility.
 """
 
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from functools import partial
@@ -38,10 +39,12 @@ def _ensure_browser() -> BrowserContext:
             if _pw is None:
                 _pw = sync_playwright().start()
             _browser = _pw.chromium.launch(
-                headless=False,
+                headless=True,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
                 ],
             )
             _context = _browser.new_context(
@@ -156,7 +159,7 @@ def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
 
 # ── Sync scraping function (runs in thread pool) ────────────────────
 def _scrape_chapter(url: str) -> dict:
-    """Fetch a chapter using Chromium (blocking / sync)."""
+    """Fetch a chapter using headless Chromium (blocking / sync)."""
     ctx = _ensure_browser()
     page = ctx.new_page()
     try:
@@ -206,15 +209,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Allow frontend origins (Vercel + local dev)
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "https://novel-chapter-fetcher-render.vercel.app/",
-    ],,
+        FRONTEND_URL,
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Health check ─────────────────────────────────────────────────────
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Novel Chapter Fetcher API"}
 
 
 # ── API endpoint ─────────────────────────────────────────────────────
