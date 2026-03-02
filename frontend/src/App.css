@@ -9,6 +9,7 @@
   --accent-hover: #7e77ff;
   --green: #4ade80;
   --red: #f87171;
+  --orange: #fb923c;
 }
 
 * {
@@ -31,12 +32,35 @@ body {
   padding: 48px 24px 80px;
 }
 
+/* ── Header row ── */
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 32px;
+}
+
 .title {
   text-align: center;
   font-size: 1.75rem;
   font-weight: 700;
-  margin-bottom: 32px;
   letter-spacing: -0.02em;
+}
+
+.clear-btn {
+  position: absolute;
+  right: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  font-size: 0.8rem;
+}
+
+.clear-btn:hover:not(:disabled) {
+  border-color: var(--red);
+  color: var(--red);
 }
 
 /* ── Input row ── */
@@ -74,7 +98,7 @@ body {
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background 0.2s, opacity 0.2s, transform 0.1s;
+  transition: background 0.2s, opacity 0.2s, transform 0.1s, border-color 0.2s, color 0.2s;
 }
 
 .btn:active {
@@ -124,7 +148,18 @@ body {
 .action-row {
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: space-between;
+}
+
+.prev-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.prev-btn:hover:not(:disabled) {
+  border-color: var(--orange);
+  color: var(--orange);
 }
 
 .copy-btn {
@@ -156,4 +191,39 @@ body {
   background: rgba(248, 113, 113, 0.08);
   border-radius: 8px;
   border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+/* ── Mobile responsive ── */
+@media (max-width: 500px) {
+  .app {
+    padding: 24px 16px 60px;
+  }
+
+  .title {
+    font-size: 1.4rem;
+  }
+
+  .input-row {
+    flex-direction: column;
+  }
+
+  .action-row {
+    flex-wrap: wrap;
+  }
+
+  .action-row .btn {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 10px;
+    font-size: 0.82rem;
+  }
+
+  .clear-btn {
+    position: static;
+    margin-left: auto;
+  }
+
+  .header-row {
+    gap: 12px;
+  }
 }
