@@ -21,8 +21,8 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
 
-# ── Thread pool for running Playwright (sync) off the event loop ─────
-_executor = ThreadPoolExecutor(max_workers=3)
+# ── Thread pool – single worker to avoid Playwright greenlet thread-binding issues ─
+_executor = ThreadPoolExecutor(max_workers=1)
 
 # ── Global browser state (accessed only from thread pool) ────────────
 _pw = None
