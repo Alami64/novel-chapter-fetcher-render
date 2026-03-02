@@ -36,6 +36,19 @@ def _ensure_browser() -> BrowserContext:
     global _pw, _browser, _context
     with _lock:
         if _context is None or _browser is None or not _browser.is_connected():
+            # Clean up any stale state
+            try:
+                if _context:
+                    _context.close()
+            except Exception:
+                pass
+            try:
+                if _browser:
+                    _browser.close()
+            except Exception:
+                pass
+            _context = None
+            _browser = None
             if _pw is None:
                 _pw = sync_playwright().start()
             _browser = _pw.chromium.launch(
@@ -74,6 +87,24 @@ def _shutdown_browser():
         if _pw:
             _pw.stop()
             _pw = None
+
+
+def _force_reset_browser():
+    """Force-reset the browser if it's in a bad state."""
+    global _browser, _context
+    with _lock:
+        try:
+            if _context:
+                _context.close()
+        except Exception:
+            pass
+        try:
+            if _browser:
+                _browser.close()
+        except Exception:
+            pass
+        _context = None
+        _browser = None
 
 
 # ── Content selectors ────────────────────────────────────────────────
@@ -160,42 +191,49 @@ def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
 # ── Sync scraping function (runs in thread pool) ────────────────────
 def _scrape_chapter(url: str) -> dict:
     """Fetch a chapter using headless Chromium (blocking / sync)."""
-    ctx = _ensure_browser()
-    page = ctx.new_page()
     try:
-        response = page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-        if response is None:
-            raise RuntimeError("No response received from page")
+        ctx = _ensure_browser()
+        page = ctx.new_page()
+        try:
+            response = page.goto(url, wait_until="domcontentloaded", timeout=25_000)
+            if response is None:
+                raise RuntimeError("No response received from page")
 
-        # Wait for Cloudflare / anti-bot challenge to resolve (up to ~15s)
-        for _ in range(8):
-            title = page.title()
-            if "请稍候" not in title and "Just a moment" not in title:
-                break
-            page.wait_for_timeout(2000)
+            # Wait for Cloudflare / anti-bot challenge (up to ~6s)
+            for _ in range(3):
+                title = page.title()
+                if "请稍候" not in title and "Just a moment" not in title:
+                    break
+                page.wait_for_timeout(2000)
 
-        # Give JS-rendered content a moment to appear
-        page.wait_for_timeout(1000)
+            # Give JS-rendered content a moment to appear
+            page.wait_for_timeout(800)
 
-        # Wait for a known content container
-        for css in CSS_SELECTORS:
-            try:
-                page.wait_for_selector(css, timeout=3000)
-                break
-            except Exception:
-                continue
+            # Wait for a known content container (shorter timeout)
+            for css in CSS_SELECTORS:
+                try:
+                    page.wait_for_selector(css, timeout=2000)
+                    break
+                except Exception:
+                    continue
 
-        html = page.content()
-    finally:
-        page.close()
+            html = page.content()
+        finally:
+            page.close()
 
-    soup = BeautifulSoup(html, "lxml")
-    text = find_content(soup)
-    if not text:
-        raise ValueError("Could not extract chapter text from this page.")
+        soup = BeautifulSoup(html, "lxml")
+        text = find_content(soup)
+        if not text:
+            raise ValueError("Could not extract chapter text from this page.")
 
-    next_url = find_next_url(soup, url)
-    return {"text": text, "next_url": next_url}
+        next_url = find_next_url(soup, url)
+        return {"text": text, "next_url": next_url}
+
+    except Exception:
+        # If anything goes wrong, force-reset the browser so the next
+        # request doesn't hang on a dead browser instance
+        _force_reset_browser()
+        raise
 
 
 # ── FastAPI lifespan ─────────────────────────────────────────────────
@@ -233,7 +271,13 @@ async def root():
 async def get_chapter(url: str = Query(..., description="Chapter URL to scrape")):
     loop = asyncio.get_event_loop()
     try:
-        result = await loop.run_in_executor(_executor, partial(_scrape_chapter, url))
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_executor, partial(_scrape_chapter, url)),
+            timeout=60,
+        )
+    except asyncio.TimeoutError:
+        _force_reset_browser()
+        raise HTTPException(status_code=504, detail="Request timed out (60s). Please try again.")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
