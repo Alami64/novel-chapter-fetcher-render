@@ -182,6 +182,16 @@ body {
   background: var(--accent-hover);
 }
 
+.next-btn.next-ready {
+  background: var(--green);
+  color: #0f1117;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.35);
+}
+
+.next-btn.next-ready:hover:not(:disabled) {
+  background: #5ced90;
+}
+
 /* ── Error ── */
 .error {
   color: var(--red);

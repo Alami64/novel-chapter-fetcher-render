@@ -38,6 +38,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [nextReady, setNextReady] = useState(false);
 
   // History stack for "Previous" button
   const [history, setHistory] = useState(saved.current?.history || []);
@@ -64,6 +65,7 @@ function App() {
   const prefetch = useCallback(
     async (nextChapterUrl) => {
       if (!nextChapterUrl) return;
+      setNextReady(false);
       try {
         const data = await fetchChapter(nextChapterUrl);
         prefetchRef.current = {
@@ -71,6 +73,7 @@ function App() {
           nextUrl: data.next_url,
           forUrl: nextChapterUrl,
         };
+        setNextReady(true);
       } catch {
         prefetchRef.current = { text: null, nextUrl: null, forUrl: null };
       }
@@ -91,6 +94,7 @@ function App() {
       }
       setChapterText(data.text);
       setNextUrl(data.next_url);
+      setNextReady(false);
       prefetch(data.next_url);
     } catch (e) {
       setError(e.message);
@@ -117,6 +121,7 @@ function App() {
       setChapterText(cached.text);
       setUrl(nextUrl);
       setNextUrl(cached.nextUrl);
+      setNextReady(false);
       prefetchRef.current = { text: null, nextUrl: null, forUrl: null };
       prefetch(cached.nextUrl);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -130,6 +135,7 @@ function App() {
       setChapterText(data.text);
       setUrl(nextUrl);
       setNextUrl(data.next_url);
+      setNextReady(false);
       prefetch(data.next_url);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
@@ -149,6 +155,7 @@ function App() {
     setCopied(false);
     setError("");
     prefetchRef.current = { text: null, nextUrl: null, forUrl: null };
+    setNextReady(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -159,6 +166,7 @@ function App() {
     setHistory([]);
     setError("");
     setCopied(false);
+    setNextReady(false);
     prefetchRef.current = { text: null, nextUrl: null, forUrl: null };
     clearState();
   };
@@ -220,11 +228,15 @@ function App() {
               {copied ? "✓ Copied!" : "📋 Copy"}
             </button>
             <button
-              className="btn next-btn"
+              className={`btn next-btn ${nextReady ? "next-ready" : ""}`}
               onClick={handleNext}
               disabled={!nextUrl || loading}
             >
-              Next Chapter →
+              {!nextUrl
+                ? "No next chapter"
+                : nextReady
+                  ? "✓ Next Chapter →"
+                  : "⏳ Loading next..."}
             </button>
           </div>
         </>
