@@ -4,54 +4,48 @@ GET /api/chapter?url=<chapter_url>
 Returns JSON: { text: str, next_url: str | null }
 
 Cloud-deployable version: runs Playwright headless in a Docker container.
-Uses sync API in a thread pool for compatibility.
+Uses Playwright async API directly – no thread pool needed on Linux.
 """
 
 import asyncio
 import os
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from functools import partial
-from threading import Lock
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from playwright.sync_api import sync_playwright, Browser, BrowserContext
+from playwright.async_api import async_playwright, Browser, BrowserContext
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
 
-# ── Thread pool – single worker to avoid Playwright greenlet thread-binding issues ─
-_executor = ThreadPoolExecutor(max_workers=1)
-
-# ── Global browser state (accessed only from thread pool) ────────────
+# ── Global browser state ─────────────────────────────────────────────
 _pw = None
 _browser: Browser | None = None
 _context: BrowserContext | None = None
-_lock = Lock()
+_browser_lock = asyncio.Lock()
 
 
-def _ensure_browser() -> BrowserContext:
-    """Lazily start Playwright + Chromium (called inside a worker thread)."""
+async def _ensure_browser() -> BrowserContext:
+    """Lazily start Playwright + Chromium."""
     global _pw, _browser, _context
-    with _lock:
+    async with _browser_lock:
         if _context is None or _browser is None or not _browser.is_connected():
-            # Clean up any stale state
+            # Clean up stale state
             try:
                 if _context:
-                    _context.close()
+                    await _context.close()
             except Exception:
                 pass
             try:
                 if _browser:
-                    _browser.close()
+                    await _browser.close()
             except Exception:
                 pass
             _context = None
             _browser = None
             if _pw is None:
-                _pw = sync_playwright().start()
-            _browser = _pw.chromium.launch(
+                _pw = await async_playwright().start()
+            _browser = await _pw.chromium.launch(
                 headless=True,
                 args=[
                     "--disable-blink-features=AutomationControlled",
@@ -60,7 +54,7 @@ def _ensure_browser() -> BrowserContext:
                     "--disable-gpu",
                 ],
             )
-            _context = _browser.new_context(
+            _context = await _browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -74,33 +68,32 @@ def _ensure_browser() -> BrowserContext:
     return _context
 
 
-def _shutdown_browser():
-    """Shut down Playwright resources (called once at app shutdown)."""
+async def _shutdown_browser():
+    """Shut down Playwright resources."""
     global _pw, _browser, _context
-    with _lock:
-        if _context:
-            _context.close()
-            _context = None
-        if _browser:
-            _browser.close()
-            _browser = None
-        if _pw:
-            _pw.stop()
-            _pw = None
+    if _context:
+        await _context.close()
+        _context = None
+    if _browser:
+        await _browser.close()
+        _browser = None
+    if _pw:
+        await _pw.stop()
+        _pw = None
 
 
-def _force_reset_browser():
+async def _force_reset_browser():
     """Force-reset the browser if it's in a bad state."""
     global _browser, _context
-    with _lock:
+    async with _browser_lock:
         try:
             if _context:
-                _context.close()
+                await _context.close()
         except Exception:
             pass
         try:
             if _browser:
-                _browser.close()
+                await _browser.close()
         except Exception:
             pass
         _context = None
@@ -163,7 +156,6 @@ def find_content(soup: BeautifulSoup) -> str | None:
 
 
 def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
-    # Method 1: look for 下一章 / next chapter links
     for pattern in NEXT_LINK_PATTERNS:
         for a in soup.find_all("a", string=pattern):
             href = a.get("href")
@@ -174,12 +166,10 @@ def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
                 href = a.get("href")
                 if href and href != "#" and "javascript" not in href.lower():
                     return urljoin(base_url, href)
-    # Method 2: id="next"
     for a in soup.find_all("a", id="next"):
         href = a.get("href")
         if href and href != "#":
             return urljoin(base_url, href)
-    # Method 3: extract from JS bookinfo object (69shuba.com)
     for script in soup.find_all("script"):
         if script.string and "next_page" in script.string:
             m = re.search(r'next_page\s*:\s*["\']([^"\']+)["\']', script.string)
@@ -188,38 +178,38 @@ def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
     return None
 
 
-# ── Sync scraping function (runs in thread pool) ────────────────────
-def _scrape_chapter(url: str) -> dict:
-    """Fetch a chapter using headless Chromium (blocking / sync)."""
+# ── Async scraping function ──────────────────────────────────────────
+async def _scrape_chapter(url: str) -> dict:
+    """Fetch a chapter using headless Chromium (async)."""
     try:
-        ctx = _ensure_browser()
-        page = ctx.new_page()
+        ctx = await _ensure_browser()
+        page = await ctx.new_page()
         try:
-            response = page.goto(url, wait_until="domcontentloaded", timeout=25_000)
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=25_000)
             if response is None:
                 raise RuntimeError("No response received from page")
 
             # Wait for Cloudflare / anti-bot challenge (up to ~6s)
             for _ in range(3):
-                title = page.title()
+                title = await page.title()
                 if "请稍候" not in title and "Just a moment" not in title:
                     break
-                page.wait_for_timeout(2000)
+                await page.wait_for_timeout(2000)
 
             # Give JS-rendered content a moment to appear
-            page.wait_for_timeout(800)
+            await page.wait_for_timeout(800)
 
-            # Wait for a known content container (shorter timeout)
+            # Wait for a known content container
             for css in CSS_SELECTORS:
                 try:
-                    page.wait_for_selector(css, timeout=2000)
+                    await page.wait_for_selector(css, timeout=2000)
                     break
                 except Exception:
                     continue
 
-            html = page.content()
+            html = await page.content()
         finally:
-            page.close()
+            await page.close()
 
         soup = BeautifulSoup(html, "lxml")
         text = find_content(soup)
@@ -230,9 +220,7 @@ def _scrape_chapter(url: str) -> dict:
         return {"text": text, "next_url": next_url}
 
     except Exception:
-        # If anything goes wrong, force-reset the browser so the next
-        # request doesn't hang on a dead browser instance
-        _force_reset_browser()
+        await _force_reset_browser()
         raise
 
 
@@ -240,9 +228,7 @@ def _scrape_chapter(url: str) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(_executor, _shutdown_browser)
-    _executor.shutdown(wait=False)
+    await _shutdown_browser()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -269,14 +255,13 @@ async def root():
 # ── API endpoint ─────────────────────────────────────────────────────
 @app.get("/api/chapter")
 async def get_chapter(url: str = Query(..., description="Chapter URL to scrape")):
-    loop = asyncio.get_event_loop()
     try:
         result = await asyncio.wait_for(
-            loop.run_in_executor(_executor, partial(_scrape_chapter, url)),
+            _scrape_chapter(url),
             timeout=60,
         )
     except asyncio.TimeoutError:
-        _force_reset_browser()
+        await _force_reset_browser()
         raise HTTPException(status_code=504, detail="Request timed out (60s). Please try again.")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
