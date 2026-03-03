@@ -258,11 +258,11 @@ async def get_chapter(url: str = Query(..., description="Chapter URL to scrape")
     try:
         result = await asyncio.wait_for(
             _scrape_chapter(url),
-            timeout=60,
+            timeout=120,
         )
     except asyncio.TimeoutError:
         await _force_reset_browser()
-        raise HTTPException(status_code=504, detail="Request timed out (60s). Please try again.")
+        raise HTTPException(status_code=504, detail="Request timed out (120s). Please try again.")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
