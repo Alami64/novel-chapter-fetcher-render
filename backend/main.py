@@ -101,8 +101,11 @@ async def _force_reset_browser():
 
 
 # ── Content selectors ────────────────────────────────────────────────
+# Each entry: (tag_types, selector_kwargs)
+# tag_types is a list of HTML elements to search (div, article, section)
 CONTENT_SELECTORS = [
     {"class_": "txtnav"},          # 69shuba.com
+    {"class_": "page-content"},    # ixdzs.tw
     {"id": "chaptercontent"},
     {"id": "content"},
     {"id": "booktxt"},
@@ -117,7 +120,14 @@ CONTENT_SELECTORS = [
     {"class_": "readcontent"},
     {"class_": "chapter-content"},
     {"class_": "p-content"},
+    {"class_": "sect1"},
+    {"class_": "reader-content"},
+    {"class_": "text-content"},
+    {"class_": "book-content"},
 ]
+
+# Element types to search for content (not just div)
+CONTENT_TAGS = ["div", "article", "section", "main"]
 
 CSS_SELECTORS: list[str] = []
 for _s in CONTENT_SELECTORS:
@@ -125,37 +135,53 @@ for _s in CONTENT_SELECTORS:
         CSS_SELECTORS.append(f"#{_s['id']}")
     elif "class_" in _s:
         CSS_SELECTORS.append(f".{_s['class_']}")
+# Also add tag-based selectors
+CSS_SELECTORS.extend(["article.page-content", "article.content", "section.content"])
 
 NEXT_LINK_PATTERNS = [
-    re.compile(r"下一[章页篇]", re.IGNORECASE),
+    re.compile(r"下一[章页篇節节]", re.IGNORECASE),
     re.compile(r"next\s*chapter", re.IGNORECASE),
+    re.compile(r"next\s*page", re.IGNORECASE),
 ]
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────
+def _extract_text(container) -> str | None:
+    """Extract clean text from a content container element."""
+    for tag in container.find_all(["script", "style", "ins", "iframe"]):
+        tag.decompose()
+
+    # Try paragraphs first
+    paragraphs = container.find_all("p")
+    if paragraphs:
+        lines = [p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)]
+        if lines:
+            return "\n\n".join(lines)
+
+    # Fall back to br-separated text
+    for br in container.find_all("br"):
+        br.replace_with("\n")
+    text = container.get_text()
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if lines:
+        return "\n\n".join(lines)
+    return None
+
+
 def find_content(soup: BeautifulSoup) -> str | None:
+    # Search across multiple element types (div, article, section, main)
     for sel in CONTENT_SELECTORS:
-        div = soup.find("div", **sel)
-        if div:
-            for tag in div.find_all(["script", "style", "ins", "iframe"]):
-                tag.decompose()
-
-            paragraphs = div.find_all("p")
-            if paragraphs:
-                lines = [p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)]
-                if lines:
-                    return "\n\n".join(lines)
-
-            for br in div.find_all("br"):
-                br.replace_with("\n")
-            text = div.get_text()
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            if lines:
-                return "\n\n".join(lines)
+        for tag_type in CONTENT_TAGS:
+            container = soup.find(tag_type, **sel)
+            if container:
+                text = _extract_text(container)
+                if text and len(text) > 100:  # skip nav/header fragments
+                    return text
     return None
 
 
 def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
+    # Method 1: text-based matching (下一章, next chapter, etc.)
     for pattern in NEXT_LINK_PATTERNS:
         for a in soup.find_all("a", string=pattern):
             href = a.get("href")
@@ -166,10 +192,30 @@ def find_next_url(soup: BeautifulSoup, base_url: str) -> str | None:
                 href = a.get("href")
                 if href and href != "#" and "javascript" not in href.lower():
                     return urljoin(base_url, href)
+
+    # Method 2: class-based matching (chapter-next, next-chapter, etc.)
+    for cls in ["chapter-next", "next-chapter", "nextchapter", "next_chapter"]:
+        a = soup.find("a", class_=cls)
+        if a:
+            href = a.get("href")
+            if href and href != "#" and "javascript" not in href.lower():
+                return urljoin(base_url, href)
+
+    # Method 3: data-url on div elements (JS-driven navigation like ixdzs.tw)
+    for cls in ["read-next", "next-btn"]:
+        div = soup.find("div", class_=cls)
+        if div:
+            data_url = div.get("data-url")
+            if data_url:
+                return urljoin(base_url, data_url)
+
+    # Method 4: id="next"
     for a in soup.find_all("a", id="next"):
         href = a.get("href")
         if href and href != "#":
             return urljoin(base_url, href)
+
+    # Method 5: extract from JS bookinfo object (69shuba.com)
     for script in soup.find_all("script"):
         if script.string and "next_page" in script.string:
             m = re.search(r'next_page\s*:\s*["\']([^"\']+)["\']', script.string)
