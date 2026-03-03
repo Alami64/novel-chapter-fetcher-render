@@ -54,7 +54,11 @@ function App() {
   }, [url, chapterText, nextUrl, history]);
 
   const fetchChapter = useCallback(async (chapterUrl) => {
-    const res = await fetch(`${API}?url=${encodeURIComponent(chapterUrl)}`);
+    const res = await fetch(`${API}?url=${encodeURIComponent(chapterUrl)}`, {
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+    });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.detail || `Error ${res.status}`);
