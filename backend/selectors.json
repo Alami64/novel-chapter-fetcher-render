@@ -1,28 +1,78 @@
 {
   "content_selectors": [
-    { "id": "txtcontent0", "comment": "twkan.com" },
-    { "class": "txtnav", "comment": "69shuba.com" },
-    { "class": "page-content", "comment": "ixdzs.tw" },
-    { "id": "chaptercontent" },
-    { "id": "content" },
-    { "id": "booktxt" },
-    { "id": "htmlContent" },
-    { "id": "TextContent" },
-    { "class": "chapter_content" },
-    { "class": "read-content" },
-    { "class": "content" },
-    { "class": "novel-content" },
-    { "class": "articlecontent" },
-    { "class": "txt" },
-    { "class": "readcontent" },
-    { "class": "chapter-content" },
-    { "class": "p-content" },
-    { "class": "sect1" },
-    { "class": "reader-content" },
-    { "class": "text-content" },
-    { "class": "book-content" }
+    {
+      "id": "txtcontent0",
+      "comment": "twkan.com"
+    },
+    {
+      "class": "txtnav",
+      "comment": "69shuba.com"
+    },
+    {
+      "class": "page-content",
+      "comment": "ixdzs.tw"
+    },
+    {
+      "id": "chaptercontent"
+    },
+    {
+      "id": "content"
+    },
+    {
+      "id": "booktxt"
+    },
+    {
+      "id": "htmlContent"
+    },
+    {
+      "id": "TextContent"
+    },
+    {
+      "class": "chapter_content"
+    },
+    {
+      "class": "read-content"
+    },
+    {
+      "class": "content"
+    },
+    {
+      "class": "novel-content"
+    },
+    {
+      "class": "articlecontent"
+    },
+    {
+      "class": "txt"
+    },
+    {
+      "class": "readcontent"
+    },
+    {
+      "class": "chapter-content"
+    },
+    {
+      "class": "p-content"
+    },
+    {
+      "class": "sect1"
+    },
+    {
+      "class": "reader-content"
+    },
+    {
+      "class": "text-content"
+    },
+    {
+      "class": "book-content"
+    }
   ],
-  "content_tags": ["div", "article", "section", "main"],
+  "content_tags": [
+    "div",
+    "article",
+    "section",
+    "main"
+  ],
   "extra_css_selectors": [
     "article.page-content",
     "article.content",
@@ -32,5 +82,39 @@
     "下一[章页篇節节]",
     "next\\s*chapter",
     "next\\s*page"
+  ],
+  "elements_to_strip": [
+    {
+      "class": "toplink",
+      "comment": "piaotia.com nav"
+    },
+    {
+      "class": "page1",
+      "comment": "twkan.com nav"
+    },
+    {
+      "class": "tools",
+      "comment": "common toolbar"
+    },
+    {
+      "class": "txtcenter",
+      "comment": "twkan.com/69shuba metadata"
+    },
+    {
+      "class": "txtinfo",
+      "comment": "twkan.com/69shuba metadata"
+    },
+    {
+      "class": "chapter-nav",
+      "comment": "generic chapter nav"
+    },
+    {
+      "class": "readtools",
+      "comment": "generic read toolbar"
+    },
+    {
+      "class": "dirlink",
+      "comment": "generic directory link"
+    }
   ]
 }

@@ -133,15 +133,22 @@ def _load_selectors():
         for p in cfg.get("next_link_patterns", [])
     ]
 
+    # Build list of classes to strip from content containers
+    strip_classes = [
+        entry["class"] for entry in cfg.get("elements_to_strip", [])
+        if "class" in entry
+    ]
+
     return (
         content_selectors,
         cfg["content_tags"],
         css_selectors,
         next_patterns,
+        strip_classes,
     )
 
 
-CONTENT_SELECTORS, CONTENT_TAGS, CSS_SELECTORS, NEXT_LINK_PATTERNS = _load_selectors()
+CONTENT_SELECTORS, CONTENT_TAGS, CSS_SELECTORS, NEXT_LINK_PATTERNS, ELEMENTS_TO_STRIP = _load_selectors()
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────
@@ -154,10 +161,8 @@ def _extract_text(container) -> str | None:
         tag.decompose()
     for tag in container.find_all("table"):
         tag.decompose()
-    # Remove common navigation/toolbar divs by class
-    nav_classes = ["toplink", "page1", "tools", "txtcenter", "txtinfo",
-                   "chapter-nav", "readtools", "dirlink"]
-    for cls in nav_classes:
+    # Remove site-specific navigation/toolbar elements (from selectors.json)
+    for cls in ELEMENTS_TO_STRIP:
         for tag in container.find_all(class_=cls):
             tag.decompose()
 
