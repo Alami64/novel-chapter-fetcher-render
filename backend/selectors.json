@@ -1,0 +1,36 @@
+{
+  "content_selectors": [
+    { "id": "txtcontent0", "comment": "twkan.com" },
+    { "class": "txtnav", "comment": "69shuba.com" },
+    { "class": "page-content", "comment": "ixdzs.tw" },
+    { "id": "chaptercontent" },
+    { "id": "content" },
+    { "id": "booktxt" },
+    { "id": "htmlContent" },
+    { "id": "TextContent" },
+    { "class": "chapter_content" },
+    { "class": "read-content" },
+    { "class": "content" },
+    { "class": "novel-content" },
+    { "class": "articlecontent" },
+    { "class": "txt" },
+    { "class": "readcontent" },
+    { "class": "chapter-content" },
+    { "class": "p-content" },
+    { "class": "sect1" },
+    { "class": "reader-content" },
+    { "class": "text-content" },
+    { "class": "book-content" }
+  ],
+  "content_tags": ["div", "article", "section", "main"],
+  "extra_css_selectors": [
+    "article.page-content",
+    "article.content",
+    "section.content"
+  ],
+  "next_link_patterns": [
+    "下一[章页篇節节]",
+    "next\\s*chapter",
+    "next\\s*page"
+  ]
+}

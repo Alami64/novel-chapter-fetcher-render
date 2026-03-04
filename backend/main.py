@@ -8,8 +8,10 @@ Uses Playwright async API directly – no thread pool needed on Linux.
 """
 
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,49 +102,46 @@ async def _force_reset_browser():
         _browser = None
 
 
-# ── Content selectors ────────────────────────────────────────────────
-# Each entry: (tag_types, selector_kwargs)
-# tag_types is a list of HTML elements to search (div, article, section)
-CONTENT_SELECTORS = [
-    {"class_": "txtnav"},          # 69shuba.com
-    {"class_": "page-content"},    # ixdzs.tw
-    {"id": "chaptercontent"},
-    {"id": "content"},
-    {"id": "booktxt"},
-    {"id": "htmlContent"},
-    {"id": "TextContent"},
-    {"class_": "chapter_content"},
-    {"class_": "read-content"},
-    {"class_": "content"},
-    {"class_": "novel-content"},
-    {"class_": "articlecontent"},
-    {"class_": "txt"},
-    {"class_": "readcontent"},
-    {"class_": "chapter-content"},
-    {"class_": "p-content"},
-    {"class_": "sect1"},
-    {"class_": "reader-content"},
-    {"class_": "text-content"},
-    {"class_": "book-content"},
-]
+# ── Load selectors from JSON config ──────────────────────────────────
+def _load_selectors():
+    """Load content selectors, tags, CSS selectors, and next-link patterns
+    from the selectors.json file located next to this script."""
+    cfg_path = Path(__file__).parent / "selectors.json"
+    with open(cfg_path, encoding="utf-8") as f:
+        cfg = json.load(f)
 
-# Element types to search for content (not just div)
-CONTENT_TAGS = ["div", "article", "section", "main"]
+    # Build BeautifulSoup-compatible selector dicts
+    content_selectors = []
+    for entry in cfg["content_selectors"]:
+        if "id" in entry:
+            content_selectors.append({"id": entry["id"]})
+        elif "class" in entry:
+            content_selectors.append({"class_": entry["class"]})
 
-CSS_SELECTORS: list[str] = []
-for _s in CONTENT_SELECTORS:
-    if "id" in _s:
-        CSS_SELECTORS.append(f"#{_s['id']}")
-    elif "class_" in _s:
-        CSS_SELECTORS.append(f".{_s['class_']}")
-# Also add tag-based selectors
-CSS_SELECTORS.extend(["article.page-content", "article.content", "section.content"])
+    # Build CSS selectors for Playwright wait_for_selector
+    css_selectors: list[str] = []
+    for s in content_selectors:
+        if "id" in s:
+            css_selectors.append(f"#{s['id']}")
+        elif "class_" in s:
+            css_selectors.append(f".{s['class_']}")
+    css_selectors.extend(cfg.get("extra_css_selectors", []))
 
-NEXT_LINK_PATTERNS = [
-    re.compile(r"下一[章页篇節节]", re.IGNORECASE),
-    re.compile(r"next\s*chapter", re.IGNORECASE),
-    re.compile(r"next\s*page", re.IGNORECASE),
-]
+    # Compile regex patterns for next-chapter link detection
+    next_patterns = [
+        re.compile(p, re.IGNORECASE)
+        for p in cfg.get("next_link_patterns", [])
+    ]
+
+    return (
+        content_selectors,
+        cfg["content_tags"],
+        css_selectors,
+        next_patterns,
+    )
+
+
+CONTENT_SELECTORS, CONTENT_TAGS, CSS_SELECTORS, NEXT_LINK_PATTERNS = _load_selectors()
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────
