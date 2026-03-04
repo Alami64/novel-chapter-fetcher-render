@@ -273,11 +273,14 @@ async def _scrape_chapter(url: str) -> dict:
             await page.close()
 
         soup = BeautifulSoup(html, "lxml")
+        
+        # Find next url BEFORE content extraction, because content extraction decomposes nav elements!
+        next_url = find_next_url(soup, url)
+        
         text = find_content(soup)
         if not text:
             raise ValueError("Could not extract chapter text from this page.")
 
-        next_url = find_next_url(soup, url)
         return {"text": text, "next_url": next_url}
 
     except Exception:
