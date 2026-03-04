@@ -147,8 +147,19 @@ CONTENT_SELECTORS, CONTENT_TAGS, CSS_SELECTORS, NEXT_LINK_PATTERNS = _load_selec
 # ── HTML helpers ─────────────────────────────────────────────────────
 def _extract_text(container) -> str | None:
     """Extract clean text from a content container element."""
+    # Remove non-content elements: scripts, styles, ads, headings, navigation
     for tag in container.find_all(["script", "style", "ins", "iframe"]):
         tag.decompose()
+    for tag in container.find_all(["h1", "h2", "h3"]):
+        tag.decompose()
+    for tag in container.find_all("table"):
+        tag.decompose()
+    # Remove common navigation/toolbar divs by class
+    nav_classes = ["toplink", "page1", "tools", "txtcenter", "txtinfo",
+                   "chapter-nav", "readtools", "dirlink"]
+    for cls in nav_classes:
+        for tag in container.find_all(class_=cls):
+            tag.decompose()
 
     # Try paragraphs first
     paragraphs = container.find_all("p")
